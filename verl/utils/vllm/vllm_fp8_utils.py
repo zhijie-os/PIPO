@@ -133,13 +133,11 @@ def restore_mxfp8_weights_for_loading(model):
             s += f"{type(module.quant_method)}, "
             if hasattr(module.quant_method, 'quant_method'):
                 s += f"{type(module.quant_method.quant_method)}, restore_weights_for_rl_loading:{hasattr(module.quant_method.quant_method, 'restore_weights_for_rl_loading')}"
-        # print(s)
+
         if hasattr(module, '_mxfp8_transformed') and hasattr(module, 'quant_method'):
             if hasattr(module.quant_method, 'quant_method') and hasattr(module.quant_method.quant_method, 'restore_weights_for_rl_loading'):
                 logger.info(f"Restoring MXFP8 weights for module: {name}")
-                # print(f'[wsh][verl]-----------before restore_weights_for_rl_loading:{module.weight.shape}')
                 module.quant_method.quant_method.restore_weights_for_rl_loading(module)
-                # print(f'[wsh][verl]-----------after restore_weights_for_rl_loading:{module.weight.shape}')
 
 def apply_mxfp8_transformation_after_loading(model):
     """Re-apply MXFP8 transformations after weight loading.
@@ -156,7 +154,6 @@ def apply_mxfp8_transformation_after_loading(model):
         logger.warning("Could not import LinearBase, skipping MXFP8 transformation")
         return
 
-    print(f"=======apply_mxfp8_transformation_after_loading==in=====fww")
     for name, module in model.named_modules():
         if (isinstance(module, LinearBase) or isinstance(module, FusedMoE)) and hasattr(module, '_mxfp8_original_shapes'):
             if hasattr(module, 'quant_method') and hasattr(module.quant_method, 'process_weights_after_loading'):
@@ -242,7 +239,7 @@ def quant_weights(weights, model, quant_config, dtype=torch.bfloat16):
     """
     
     is_mxfp8_npu = is_mxfp8_vllm_ascend(quant_config)
-    print(f'[wsh][verl]------------------quant weights:{is_mxfp8_npu}')
+
     weight_block_size = None
     # if quant_config.weight_block_size is None:
     #     raise ValueError("Currently only support blockwise quantization, please set weight_block_size in quant_config")
@@ -296,14 +293,12 @@ def load_quanted_weights(weights, model_runner):
     vllm_dtype = model_runner.vllm_config.model_config.dtype
 
     is_mxfp8_npu = is_mxfp8_vllm_ascend(quant_config)
-    print(f"[wsh][verl]---------load_quanted_weights :{is_mxfp8_npu}")
 
     if is_mxfp8_npu:
         # For MXFP8 on NPU, we need to restore weights to original shapes
         # before loading, then re-apply transformation after loading.
         # This is because process_weights_after_loading transposes the weights,
         # but the weight_loader expects original shapes.
-        logger.info("[wsh][verl] MXFP8 NPU detected: restoring weights for RL reload")
         restore_mxfp8_weights_for_loading(model)
 
     weights_quantized = quant_weights(weights, model, quant_config, dtype=vllm_dtype)
@@ -322,7 +317,6 @@ def load_quanted_weights(weights, model_runner):
             param.__class__ = param.orig_type
 
     if is_mxfp8_npu:
-        print(f"=======is_mxfp8_npu_in:{is_mxfp8_npu}===process=======wsh")
         # Re-apply MXFP8 transformations after weight loading
         logger.info("MXFP8 NPU: re-applying transformations after weight load")
         apply_mxfp8_transformation_after_loading(model)
